@@ -1,24 +1,21 @@
 import streamlit as st
 from langchain.chat_models import ChatOpenAI
-from langchain.callbacks.base import BaseCallbackHandler
-from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
-from langchain.storage import LocalFileStore
+from langchain.prompts import ChatPromptTemplate
 from langchain.document_loaders import UnstructuredFileLoader
-from langchain.text_splitter import CharacterTextSplitter
-from langchain.embeddings import OpenAIEmbeddings, CacheBackedEmbeddings
-from langchain.vectorstores import FAISS
-from langchain.schema.runnable import RunnablePassthrough, RunnableLambda
-from langchain.memory import ConversationBufferMemory
 from langchain.callbacks import StreamingStdOutCallbackHandler
+from langchain.cache import InMemoryCache
 
 import json
 
 import os
+import random
 
 os.environ["OPENAI_API_KEY"] = "dummy_api_key"
+cache = InMemoryCache()
 
 st.set_page_config(page_title="Advanced Quiz GPT", page_icon="📖")
 st.title("Welcome! Advanced Quiz GPT")
+
 function = {
     "name": "gen_quiz",
     "description": "this function convert array of quiz to json format",
@@ -54,7 +51,7 @@ function = {
     },
 }
 
-
+chat_model = None
 with st.sidebar:
     st.page_link(
         page="https://github.com/kjy7097/gpt_fullstack_assignment7.git",
@@ -65,21 +62,27 @@ with st.sidebar:
     )
     if api_key:
         os.environ["OPENAI_API_KEY"] = api_key
-        difficulty = st.selectbox(
-            "Difficulty level",
-            ["Beginner", "Intermediate", "Advanced"],
-            placeholder="Choose the difficulty level for the quiz.",
-        )
-        num_quiz = st.number_input("The number of quiz", 0, 20, step=1, value=5)
-        user_req = st.text_area(
-            "Additional requirements",
-            placeholder="""Enter anything you want....
-Ex) Please generate the quiz in Korean
-            """,
-        )
         file = st.file_uploader(
             "Upload a .txt .pdf or .docx file", type=["pdf", "txt", "docx"]
         )
+        if file:
+            temperature = st.slider("Variety", 0.0, 1.0, 0.5, 0.1)
+            chat_model = st.selectbox("Model", ["gpt-4o-mini", "gpt-4o"])
+            difficulty = st.selectbox(
+                "Difficulty level",
+                ["Beginner", "Intermediate", "Advanced", "Random"],
+                placeholder="Choose the difficulty level for the quiz.",
+            )
+            num_quiz = st.number_input("The number of quiz", 0, 20, step=1, value=5)
+            language = st.selectbox(
+                "Language", ["Korean", "English", "Japanese", "Chinese"]
+            )
+            user_req = st.text_area(
+                "Additional requirements",
+                placeholder="""Enter anything you want....
+    Ex) Give me Quiz about Winston.
+                """,
+            )
 
 
 def format_docs(docs):
@@ -97,20 +100,23 @@ def load_file(file):
     return docs
 
 
-llm = ChatOpenAI(
-    model="gpt-4o-mini",
-    temperature=0.1,
-    streaming=True,
-    callbacks=[
-        StreamingStdOutCallbackHandler(),
-    ],
-).bind(function_call="auto", functions=[function])
+if chat_model:
+    print(temperature)
+    llm = ChatOpenAI(
+        model=chat_model,
+        temperature=temperature,
+        streaming=True,
+        callbacks=[
+            StreamingStdOutCallbackHandler(),
+        ],
+    ).bind(function_call="auto", functions=[function])
 
 
 @st.cache_data(show_spinner="Making quiz...")
 def run_quiz_chain(
     num_quiz,
     difficulty,
+    language,
     user_req,
     _docs,
     topic,
@@ -120,20 +126,29 @@ def run_quiz_chain(
         {
             "num_quiz": lambda input: input["num_quiz"],
             "difficulty": lambda input: input["difficulty"],
+            "language": lambda input: input["language"],
             "requirements": lambda input: input["requirements"],
             "context": format_docs,
         }
         | prompt
         | llm
     )
-    return chain.invoke(
+    response = chain.invoke(
         {
             "num_quiz": str(num_quiz),
             "difficulty": difficulty,
+            "language": language,
             "requirements": user_req,
             "context": _docs,
         }
     )
+    quiz_json = json.loads(response.additional_kwargs["function_call"]["arguments"])
+    problems = quiz_json["problems"]
+    for problem in problems:
+        question = problem["question"]
+        answers = problem["answers"]
+        random.shuffle(answers)
+    return problems
 
 
 prompt = ChatPromptTemplate.from_messages(
@@ -147,29 +162,17 @@ prompt = ChatPromptTemplate.from_messages(
 
             The diffculty level of the quiz is {difficulty}
 
+            The quiz should be created in {language}
+
             Each question should have 4 answers, three of them must be incorrect and one should be correct.
-
-            Use (o) to signal the correct answer.
-
-            Question examples:
-
-            Question: What is the color of the ocean?
-            Answers: Red|Yellow|Green|Blue(o)
-
-            Question: What is the capital or Georgia?
-            Answers: Baku|Tbilisi(o)|Manila|Beirut
-
-            Question: When was Avatar released?
-            Answers: 2007|2001|2009(o)|1998
-
-            Question: Who was Julius Caesar?
-            Answers: A Roman Emperor(o)|Painter|Actor|Model
 
             You will generate all quiz as json format
 
             Additional requirements : {requirements}
 
-            Your turn!
+            Your turn! 
+            
+            IMPORTANT: You do not create problems in the order of the context provided but shuffle them instead.
 
             Context: {context}
             """,
@@ -184,33 +187,27 @@ def get_num_quiz(input):
 
 if api_key:
     os.environ["OPENAI_API_KEY"] = api_key
-
     if file:
+        if st.button("New Quiz"):
+            st.cache_data.clear()
         docs = load_file(file)
-        response = run_quiz_chain(
+        problems = run_quiz_chain(
             num_quiz=num_quiz,
             difficulty=difficulty,
+            language=language,
             user_req=user_req,
             _docs=docs,
             topic=file.name,
         )
         with st.form("questions form"):
-            quiz_json = json.loads(
-                response.additional_kwargs["function_call"]["arguments"]
-            )
             correct_count = 0
-            for problem in quiz_json["problems"]:
+            for problem in problems:
                 st.write(problem["question"])
                 value = st.radio(
                     "Select an option",
-                    [
-                        answer["answer"].replace("(o)", "")
-                        for answer in problem["answers"]
-                    ],
+                    [answer["answer"] for answer in problem["answers"]],
                     index=None,
                 )
-                if value is not None:
-                    value = value + "(o)"
                 if {"answer": value, "correct": True} in problem["answers"]:
                     st.success("Correct!")
                     correct_count += 1
