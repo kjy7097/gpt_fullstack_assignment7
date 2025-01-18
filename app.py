@@ -216,9 +216,9 @@ if api_key:
                     index=None,
                 )
                 if toggle:
-                    for answer in problem["answers"]:
-                        if answer["correct"]:
-                            st.success(f"Correct Answer : {answer['answer']}")
+                    st.success(
+                        f"Correct Answer : {[a['answer'] for a in problem['answers'] if a['correct']][0]}"
+                    )
                 if {"answer": value, "correct": True} in problem["answers"]:
                     st.success("Correct!")
                     correct_count += 1
