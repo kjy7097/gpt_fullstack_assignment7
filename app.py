@@ -57,32 +57,38 @@ with st.sidebar:
         page="https://github.com/kjy7097/gpt_fullstack_assignment7.git",
         label="Click! to go Github Repo.",
     )
-    api_key = st.text_input(
-        "Enter OpenAI API Key....",
-    )
+    with st.form("api_form"):
+        col1, col2 = st.columns(2)
+        api_key = col1.text_input(
+            "Enter OpenAI API Key....",
+        )
+        col2.form_submit_button("Apply")
+
     if api_key:
         os.environ["OPENAI_API_KEY"] = api_key
-        file = st.file_uploader(
-            "Upload a .txt .pdf or .docx file", type=["pdf", "txt", "docx"]
-        )
-        if file:
-            temperature = st.slider("Variety", 0.0, 1.0, 0.5, 0.1)
-            chat_model = st.selectbox("Model", ["gpt-4o-mini", "gpt-4o"])
-            difficulty = st.selectbox(
-                "Difficulty level",
-                ["Beginner", "Intermediate", "Advanced", "Random"],
-                placeholder="Choose the difficulty level for the quiz.",
+        with st.form("quiz_gen_form"):
+            file = st.file_uploader(
+                "Upload a .txt .pdf or .docx file", type=["pdf", "txt", "docx"]
             )
-            num_quiz = st.number_input("The number of quiz", 0, 20, step=1, value=5)
-            language = st.selectbox(
-                "Language", ["Korean", "English", "Japanese", "Chinese"]
-            )
-            user_req = st.text_area(
-                "Additional requirements",
-                placeholder="""Enter anything you want....
-    Ex) Give me Quiz about Winston.
-                """,
-            )
+            with st.expander("Options"):
+                temperature = st.slider("Variety", 0.0, 1.0, 0.5, 0.1)
+                chat_model = st.selectbox("Model", ["gpt-4o-mini", "gpt-4o"])
+                difficulty = st.selectbox(
+                    "Difficulty level",
+                    ["Beginner", "Intermediate", "Advanced", "Random"],
+                    placeholder="Choose the difficulty level for the quiz.",
+                )
+                num_quiz = st.number_input("The number of quiz", 0, 20, step=1, value=5)
+                language = st.selectbox(
+                    "Language", ["Korean", "English", "Japanese", "Chinese"]
+                )
+                user_req = st.text_area(
+                    "Additional requirements",
+                    placeholder="""Enter anything you want....
+Ex) Give me Quiz about Winston.
+                    """,
+                )
+            st.form_submit_button("Make Quiz")
 
 
 def format_docs(docs):
