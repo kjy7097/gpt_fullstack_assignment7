@@ -101,7 +101,6 @@ def load_file(file):
 
 
 if chat_model:
-    print(temperature)
     llm = ChatOpenAI(
         model=chat_model,
         temperature=temperature,
