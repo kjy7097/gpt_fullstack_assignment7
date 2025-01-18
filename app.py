@@ -106,19 +106,10 @@ def load_file(file):
     return docs
 
 
-if chat_model:
-    llm = ChatOpenAI(
-        model=chat_model,
-        temperature=temperature,
-        streaming=True,
-        callbacks=[
-            StreamingStdOutCallbackHandler(),
-        ],
-    ).bind(function_call="auto", functions=[function])
-
-
 @st.cache_data(show_spinner="Making quiz...")
 def run_quiz_chain(
+    chat_model,
+    temperature,
     num_quiz,
     difficulty,
     language,
@@ -127,6 +118,14 @@ def run_quiz_chain(
     topic,
 ):
     os.environ["OPENAI_API_KEY"] = api_key
+    llm = ChatOpenAI(
+        model=chat_model,
+        temperature=temperature,
+        streaming=True,
+        callbacks=[
+            StreamingStdOutCallbackHandler(),
+        ],
+    ).bind(function_call="auto", functions=[function])
     chain = (
         {
             "num_quiz": lambda input: input["num_quiz"],
@@ -199,6 +198,8 @@ if api_key:
         toggle = col2.checkbox("See correct answer")
         docs = load_file(file)
         problems = run_quiz_chain(
+            chat_model=chat_model,
+            temperature=temperature,
             num_quiz=num_quiz,
             difficulty=difficulty,
             language=language,
