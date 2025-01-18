@@ -193,8 +193,10 @@ def get_num_quiz(input):
 if api_key:
     os.environ["OPENAI_API_KEY"] = api_key
     if file:
-        if st.button("New Quiz"):
+        col1, col2 = st.columns(2)
+        if col1.button("New Quiz"):
             st.cache_data.clear()
+        toggle = col2.checkbox("See correct answer")
         docs = load_file(file)
         problems = run_quiz_chain(
             num_quiz=num_quiz,
@@ -213,6 +215,10 @@ if api_key:
                     [answer["answer"] for answer in problem["answers"]],
                     index=None,
                 )
+                if toggle:
+                    for answer in problem["answers"]:
+                        if answer["correct"]:
+                            st.success(f"Correct Answer : {answer['answer']}")
                 if {"answer": value, "correct": True} in problem["answers"]:
                     st.success("Correct!")
                     correct_count += 1
